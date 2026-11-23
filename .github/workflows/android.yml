@@ -2,7 +2,9 @@ name: Build Candy Blast APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -25,41 +27,28 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-disabled: false
-          cache-cleanup: on-success
 
-      - name: Reduce Gradle download concurrency
+      - name: Configure Gradle
         run: |
           mkdir -p ~/.gradle
           echo "org.gradle.parallel=false" >> ~/.gradle/gradle.properties
           echo "org.gradle.workers.max=2" >> ~/.gradle/gradle.properties
           echo "org.gradle.caching=true" >> ~/.gradle/gradle.properties
 
-      - name: Build APK with retries
+      - name: Build Candy Blast APK
         run: |
-          for attempt in 1 2 3; do
-            echo "Build attempt $attempt"
-            if gradle assembleDebug --no-daemon --stacktrace; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "Build failed. Waiting before retry..."
-              sleep 30
-            fi
-          done
-          exit 1
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CandyBlast-debug-apk
+          name: CandyBlast-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
