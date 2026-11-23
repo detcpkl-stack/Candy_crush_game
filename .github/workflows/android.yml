@@ -1,54 +1,65 @@
-
-name: Build Candy Crush APK
+name: Build Candy Blast APK
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          packages: 'platform-tools'
+          cache-disabled: false
+          cache-cleanup: on-success
 
-      - name: Install Android Platform and Build Tools
+      - name: Reduce Gradle download concurrency
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          mkdir -p ~/.gradle
+          echo "org.gradle.parallel=false" >> ~/.gradle/gradle.properties
+          echo "org.gradle.workers.max=2" >> ~/.gradle/gradle.properties
+          echo "org.gradle.caching=true" >> ~/.gradle/gradle.properties
 
-      - name: Accept Licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Check Project Files
+      - name: Build APK with retries
         run: |
-          ls -la
-          ls -la app
-
-      - name: Build Debug APK
-        run: |
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            gradle assembleDebug
-          fi
+          for attempt in 1 2 3; do
+            echo "Build attempt $attempt"
+            if gradle assembleDebug --no-daemon --stacktrace; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Build failed. Waiting before retry..."
+              sleep 30
+            fi
+          done
+          exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Candy-Crush-APK
+          name: CandyBlast-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 7
